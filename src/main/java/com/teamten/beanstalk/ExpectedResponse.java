@@ -25,43 +25,43 @@ package com.teamten.beanstalk;
 /**
  * Enumerates the types of responses that we expect from the server.
  */
-enum ExpectedResponse {
-    /**
-     * The command does not contain data.
-     */
-    None(0),
+public enum ExpectedResponse {
+  /**
+   * The command does not contain data.
+   */
+  NONE(0),
 
-    /**
-     * The command contains raw data, such as a job.
-     */
-    ByteArray(1),
+  /**
+   * The command contains raw data, such as a job.
+   */
+  BYTE_ARRAY(1),
 
-    /**
-     * The command contains a YAML document with a list of strings.
-     */
-    List(2),
+  /**
+   * The command contains a YAML document with a list of strings.
+   */
+  LIST(2),
 
-    /**
-     * The command contains a YAML document with a map from string to string.
-     */
-    Map(3);
+  /**
+   * The command contains a YAML document with a map from string to string.
+   */
+  MAP(3);
 
-    private int id = 0;
+  private final int id;
 
-    ExpectedResponse(int id) {
-        this.id = id;
+  ExpectedResponse(final int id) {
+    this.id = id;
+  }
+
+  public int getId() {
+    return id;
+  }
+
+  public static ExpectedResponse getById(final int id) {
+    for (final ExpectedResponse t : values()) {
+      if (t.id == id) {
+        return t;
+      }
     }
-
-    public int getId() {
-        return id;
-    }
-
-    public static ExpectedResponse getById(int id) {
-        for (ExpectedResponse t : values()) {
-            if (t.id == id) {
-                return t;
-            }
-        }
-        return null;
-    }
+    return null;
+  }
 }

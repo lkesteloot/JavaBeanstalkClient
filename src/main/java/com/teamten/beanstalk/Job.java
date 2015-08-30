@@ -28,20 +28,21 @@ package com.teamten.beanstalk;
  * @author Robert Tykulsker
  */
 public interface Job {
-    /**
-     * Get the job ID for this job.
-     *
-     * @return The job ID.
-     */
-    public long getJobId();
 
-    /**
-     * Fetch the raw data for this job.
-     */
-    public byte[] getData();
+  /**
+   * Get the job ID for this job.
+   *
+   * @return The job ID.
+   */
+  long getJobId();
 
-    /**
-     * Set the raw data for this job.
-     */
-    public void setData(byte[] data);
+  /**
+   * Fetch the raw data for this job.
+   */
+  byte[] getData();
+
+  /**
+   * Set the raw data for this job.
+   */
+  void setData(byte[] data);
 }
