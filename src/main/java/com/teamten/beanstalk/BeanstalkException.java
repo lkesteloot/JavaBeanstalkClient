@@ -30,9 +30,8 @@ import java.io.IOException;
  * @author Robert Tykulsker
  */
 public class BeanstalkException extends IOException {
-    private static final long serialVersionUID = 5592298800830452296L;
 
-    public BeanstalkException(String message) {
-        super(message);
-    }
+  public BeanstalkException(final String message) {
+    super(message);
+  }
 }

@@ -23,7 +23,6 @@ package com.teamten.beanstalk;
  */
 
 import java.io.IOException;
-
 import java.util.List;
 import java.util.Map;
 
@@ -31,431 +30,450 @@ import java.util.Map;
  * Concrete implementation of the BeanstalkClient interface.
  */
 public class BeanstalkClientImpl implements BeanstalkClient {
-    private static final String CLIENT_VERSION = "1.4.8";
-    private static final long MAX_PRIORITY = 4294967296L;
-    private ProtocolHandler protocolHandler = null;
 
-    /**
-     * Create a client with the default {@link BeanstalkClient.DEFAULT_HOST host}
-     * and {@link BeanstalkClient.DEFAULT_PORT port}.
-     *
-     * @throws IOException if it could not connect to the server.
-     */
-    public BeanstalkClientImpl() throws IOException {
-        this(DEFAULT_HOST, DEFAULT_PORT);
+  private static final String CLIENT_VERSION = "1.4.8";
+  private static final long MAX_PRIORITY = 4294967296L;
+  private final SocketProtocol connection;
+
+  /**
+   * Create a client with the default {@link BeanstalkClient.DEFAULT_HOST host} and {@link
+   * BeanstalkClient.DEFAULT_PORT port}.
+   *
+   * @throws IOException if it could not connect to the server.
+   */
+  public BeanstalkClientImpl() throws IOException {
+    this(DEFAULT_HOST, DEFAULT_PORT);
+  }
+
+  /**
+   * Create a client with the specified host and port.
+   *
+   * @throws IOException if it could not connect to the server.
+   */
+  public BeanstalkClientImpl(final String host, final int port) throws IOException {
+    connection = new SocketProtocol(host, port);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public long put(
+      final long priority,
+      final int delaySeconds,
+      final int timeToRun,
+      final byte[] data
+  ) throws IOException {
+    if (data == null) {
+      throw new NullPointerException("null data");
     }
 
-    /**
-     * Create a client with the specified host and port.
-     *
-     * @throws IOException if it could not connect to the server.
-     */
-    public BeanstalkClientImpl(String host, int port) throws IOException {
-        protocolHandler = new ProtocolHandler(host, port);
+    if (priority > MAX_PRIORITY) {
+      throw new IllegalArgumentException("invalid priority");
     }
 
-    // ****************************************************************
-    // Producer methods
-    // ****************************************************************
-    @Override // BeanstalkClient
-    public long put(long priority, int delaySeconds, int timeToRun, byte[] data) throws IOException {
-        if (data == null) {
-            throw new NullPointerException("null data");
-        }
-        if (priority > MAX_PRIORITY) {
-            throw new IllegalArgumentException("invalid priority");
-        }
-        long jobId = -1;
-        Request request = new Request(
-                "put " + priority + " " + delaySeconds + " " + timeToRun + " " + data.length,
-                new String[] {
-                    "INSERTED", "BURIED"
-                },
-                new String[] {
-                    "JOB_TOO_BIG"
-                },
-                data,
-                ExpectedResponse.None);
-        Response response = protocolHandler.processRequest(request);
-        if (response != null && response.getStatus().equals("JOB_TOO_BIG")) {
-            throw new BeanstalkException(response.getStatus());
-        }
-        if (response != null && response.isMatchOk()) {
-            jobId = Long.parseLong(response.getReponse());
-        }
-        return jobId;
+    final Request request = new Request(
+        "put " + priority + " " + delaySeconds + " " + timeToRun + " " + data.length,
+        new String[]{"INSERTED", "BURIED"},
+        new String[]{"JOB_TOO_BIG", "EXPECTED_CRLF", "DRAINING"},
+        data,
+        ExpectedResponse.NONE
+    );
+
+    final Response response = connection.processRequest(request);
+    if (response.isMatchOk()) {
+      return Long.parseLong(response.getResponse());
     }
 
-    @Override // BeanstalkClient
-    public void useTube(String tubeName) throws IOException {
-        if (tubeName == null) {
-            throw new NullPointerException("null tubeName");
-        }
-        Request request = new Request(
-                "use " + tubeName,
-                "USING",
-                null,
-                null,
-                ExpectedResponse.None);
-        protocolHandler.processRequest(request);
+    throw new BeanstalkException(response.getStatus());
+  }
+
+  @Override
+  public void useTube(final String tubeName) throws IOException {
+    if (tubeName == null) {
+      throw new NullPointerException("null tubeName");
     }
 
-    // ****************************************************************
-    // Consumer methods
-    //	job-related
-    // ****************************************************************	
-    @Override // BeanstalkClient
-    public Job reserve(Integer timeoutSeconds) throws IOException {
-        Job job = null;
-        String command = (timeoutSeconds == null)
-                         ? "reserve"
-                         : "reserve-with-timeout " + timeoutSeconds.toString();
-        Request request = new Request(
-                command,
-                new String[] {
-                    "RESERVED"
-                },
-                new String[] {
-                    "DEADLINE_SOON", "TIMED_OUT",
-                },
-                null,
-                ExpectedResponse.ByteArray,
-                2);
-        Response response = protocolHandler.processRequest(request);
-        if (response != null && response.getStatus().equals("DEADLINE_SOON")) {
-            throw new BeanstalkException(response.getStatus());
-        }
-        if (response != null && response.isMatchOk()) {
-            long jobId = Long.parseLong(response.getReponse());
-            job = new JobImpl(jobId);
-            job.setData((byte[]) response.getData());
-        }
-        return job;
+    final Request request = new Request(
+        "use " + tubeName,
+        new String[]{"USING"},
+        null,
+        null,
+        ExpectedResponse.NONE
+    );
+
+    connection.processRequest(request);
+  }
+
+  @Override
+  public Job reserve(final Integer timeoutSeconds) throws IOException {
+    final String command = (timeoutSeconds == null)
+                           ? "reserve"
+                           : "reserve-with-timeout " + timeoutSeconds.toString();
+
+    final Request request = new Request(
+        command,
+        new String[]{"RESERVED"},
+        new String[]{"DEADLINE_SOON", "TIMED_OUT"},
+        null,
+        ExpectedResponse.BYTE_ARRAY,
+        2
+    );
+
+    final Response response = connection.processRequest(request);
+    if (response.isMatchOk()) {
+      final Job job = new JobImpl(Long.parseLong(response.getResponse()));
+      job.setData((byte[]) response.getData());
+      return job;
     }
 
-    @Override // BeanstalkClient
-    public boolean delete(long jobId) throws IOException {
-        Request request = new Request(
-                "delete " + jobId,
-                "DELETED",
-                "NOT_FOUND",
-                null,
-                ExpectedResponse.None);
-        Response response = protocolHandler.processRequest(request);
-        return response != null && response.isMatchOk();
+    throw new BeanstalkException(response.getStatus());
+  }
+
+  @Override
+  public boolean delete(final long jobId) throws IOException {
+    final Request request = new Request(
+        "delete " + jobId,
+        new String[]{"DELETED"},
+        new String[]{"NOT_FOUND"},
+        null,
+        ExpectedResponse.NONE
+    );
+    final Response response = connection.processRequest(request);
+    return response != null && response.isMatchOk();
+  }
+
+  @Override
+  public boolean release(
+      final long jobId,
+      final long priority,
+      final int delaySeconds
+  ) throws IOException {
+    final Request request = new Request(
+        "release " + jobId + " " + priority + " " + delaySeconds,
+        new String[]{"RELEASED"},
+        new String[]{"NOT_FOUND", "BURIED"},
+        null,
+        ExpectedResponse.NONE
+    );
+    final Response response = connection.processRequest(request);
+    return response != null && response.isMatchOk();
+  }
+
+  @Override
+  public boolean bury(final long jobId, final long priority) throws IOException {
+    final Request request = new Request(
+        "bury " + jobId + " " + priority,
+        new String[]{"BURIED"},
+        new String[]{"NOT_FOUND"},
+        null,
+        ExpectedResponse.NONE
+    );
+    final Response response = connection.processRequest(request);
+    return response != null && response.isMatchOk();
+  }
+
+  @Override
+  public boolean touch(final long jobId) throws IOException {
+    final Request request = new Request(
+        "touch " + jobId,
+        new String[]{"TOUCHED"},
+        new String[]{"NOT_FOUND"},
+        null,
+        ExpectedResponse.NONE
+    );
+    final Response response = connection.processRequest(request);
+    return response != null && response.isMatchOk();
+  }
+
+  @Override
+  public int watch(final String tubeName) throws IOException {
+    if (tubeName == null) {
+      throw new NullPointerException("null tubeName");
     }
 
-    @Override // BeanstalkClient
-    public boolean release(long jobId, long priority, int delaySeconds) throws IOException {
-        Request request = new Request(
-                "release " + jobId + " " + priority + " " + delaySeconds,
-                new String[] {
-                    "RELEASED"
-                },
-                new String[] {
-                    "NOT_FOUND", "BURIED"
-                },
-                null,
-                ExpectedResponse.None);
-        Response response = protocolHandler.processRequest(request);
-        return response != null && response.isMatchOk();
+    final Request request = new Request(
+        "watch " + tubeName,
+        new String[]{"WATCHING"},
+        null,
+        null,
+        ExpectedResponse.NONE
+    );
+    final Response response = connection.processRequest(request);
+    return Integer.parseInt(response.getResponse());
+  }
+
+  @Override
+  public int ignore(final String tubeName) throws IOException {
+    if (tubeName == null) {
+      throw new NullPointerException("null tubeName");
     }
 
-    @Override // BeanstalkClient
-    public boolean bury(long jobId, long priority) throws IOException {
-        Request request = new Request(
-                "bury " + jobId + " " + priority,
-                "BURIED",
-                "NOT_FOUND",
-                null,
-                ExpectedResponse.None);
-        Response response = protocolHandler.processRequest(request);
-        return response != null && response.isMatchOk();
+    final Request request = new Request(
+        "ignore " + tubeName,
+        new String[]{"WATCHING", "NOT_IGNORED"},
+        null,
+        null,
+        ExpectedResponse.NONE
+    );
+    final Response response = connection.processRequest(request);
+    return (response.getResponse() == null) ? -1 : Integer.parseInt(response.getResponse());
+  }
+
+  @Override
+  public Job peek(final long jobId) throws IOException {
+    final Request request = new Request(
+        "peek " + jobId,
+        new String[]{"FOUND"},
+        new String[]{"NOT_FOUND"},
+        null,
+        ExpectedResponse.BYTE_ARRAY,
+        2
+    );
+
+    final Response response = connection.processRequest(request);
+    if (response.isMatchOk()) {
+      final Job job = new JobImpl(Long.parseLong(response.getResponse()));
+      job.setData((byte[]) response.getData());
+      return job;
     }
 
-    @Override // BeanstalkClient
-    public boolean touch(long jobId) throws IOException {
-        Request request = new Request(
-                "touch " + jobId,
-                "TOUCHED",
-                "NOT_FOUND",
-                null,
-                ExpectedResponse.None);
-        Response response = protocolHandler.processRequest(request);
-        return response != null && response.isMatchOk();
+    throw new BeanstalkException(response.getStatus());
+  }
+
+  @Override
+  public Job peekBuried() throws IOException {
+    final Request request = new Request(
+        "peek-buried",
+        new String[]{"FOUND"},
+        new String[]{"NOT_FOUND"},
+        null,
+        ExpectedResponse.BYTE_ARRAY,
+        2
+    );
+
+    final Response response = connection.processRequest(request);
+    if (response.isMatchOk()) {
+      final Job job = new JobImpl(Long.parseLong(response.getResponse()));
+      job.setData((byte[]) response.getData());
+      return job;
     }
 
-    // ****************************************************************
-    // Consumer methods
-    //	tube-related
-    // ****************************************************************
-    @Override // BeanstalkClient
-    public int watch(String tubeName) throws IOException {
-        if (tubeName == null) {
-            throw new NullPointerException("null tubeName");
-        }
-        Request request = new Request(
-                "watch " + tubeName,
-                "WATCHING",
-                null,
-                null,
-                ExpectedResponse.None);
-        Response response = protocolHandler.processRequest(request);
-        return Integer.parseInt(response.getReponse());
+    throw new BeanstalkException(response.getStatus());
+  }
+
+  @Override
+  public Job peekDelayed() throws IOException {
+    final Request request = new Request(
+        "peek-delayed",
+        new String[]{"FOUND"},
+        new String[]{"NOT_FOUND"},
+        null,
+        ExpectedResponse.BYTE_ARRAY,
+        2
+    );
+
+    final Response response = connection.processRequest(request);
+    if (response.isMatchOk()) {
+      final Job job = new JobImpl(Long.parseLong(response.getResponse()));
+      job.setData((byte[]) response.getData());
+      return job;
     }
 
-    @Override // BeanstalkClient
-    public int ignore(String tubeName) throws IOException {
-        if (tubeName == null) {
-            throw new NullPointerException("null tubeName");
-        }
-        Request request = new Request(
-                "ignore " + tubeName,
-                new String[] {
-                    "WATCHING", "NOT_IGNORED"
-                },
-                null,
-                null,
-                ExpectedResponse.None);
-        Response response = protocolHandler.processRequest(request);
-        return (response.getReponse() == null) ? -1 : Integer.parseInt(response.getReponse());
+    throw new BeanstalkException(response.getStatus());
+  }
+
+  @Override
+  public Job peekReady() throws IOException {
+    final Request request = new Request(
+        "peek-ready",
+        new String[]{"FOUND"},
+        new String[]{"NOT_FOUND"},
+        null,
+        ExpectedResponse.BYTE_ARRAY,
+        2
+    );
+
+    final Response response = connection.processRequest(request);
+    if (response.isMatchOk()) {
+      final Job job = new JobImpl(Long.parseLong(response.getResponse()));
+      job.setData((byte[]) response.getData());
+      return job;
     }
 
-    // ****************************************************************
-    // Consumer methods
-    //	peek-related
-    // ****************************************************************
-    @Override // BeanstalkClient
-    public Job peek(long jobId) throws IOException {
-        Job job = null;
-        Request request = new Request(
-                "peek " + jobId,
-                "FOUND",
-                "NOT_FOUND",
-                null,
-                ExpectedResponse.ByteArray,
-                2);
-        Response response = protocolHandler.processRequest(request);
-        if (response != null && response.isMatchOk()) {
-            jobId = Long.parseLong(response.getReponse());
-            job = new JobImpl(jobId);
-            job.setData((byte[]) response.getData());
-        }
-        return job;
+    throw new BeanstalkException(response.getStatus());
+  }
+
+  @Override
+  public int kick(final int count) throws IOException {
+    final Request request = new Request(
+        "kick " + count,
+        new String[]{"KICKED"},
+        null,
+        null,
+        ExpectedResponse.NONE
+    );
+
+    final Response response = connection.processRequest(request);
+    if (response.isMatchOk()) {
+      return Integer.parseInt(response.getResponse());
     }
 
-    @Override // BeanstalkClient
-    public Job peekBuried() throws IOException {
-        Job job = null;
-        Request request = new Request(
-                "peek-buried",
-                "FOUND",
-                "NOT_FOUND",
-                null,
-                ExpectedResponse.ByteArray,
-                2);
-        Response response = protocolHandler.processRequest(request);
-        if (response != null && response.isMatchOk()) {
-            long jobId = Long.parseLong(response.getReponse());
-            job = new JobImpl(jobId);
-            job.setData((byte[]) response.getData());
-        }
-        return job;
+    throw new BeanstalkException(response.getStatus());
+  }
+
+  @Override
+  public Map<String, String> statsJob(final long jobId) throws IOException {
+    final Request request = new Request(
+        "stats-job " + jobId,
+        new String[]{"OK"},
+        new String[]{"NOT_FOUND"},
+        null,
+        ExpectedResponse.MAP
+    );
+
+    final Response response = connection.processRequest(request);
+    if (response.isMatchOk()) {
+      @SuppressWarnings("unchecked")
+      final Map<String, String> map = (Map<String, String>) response.getData();
+      return map;
     }
 
-    @Override // BeanstalkClient
-    public Job peekDelayed() throws IOException {
-        Job job = null;
-        Request request = new Request(
-                "peek-delayed",
-                "FOUND",
-                "NOT_FOUND",
-                null,
-                ExpectedResponse.ByteArray,
-                2);
-        Response response = protocolHandler.processRequest(request);
-        if (response != null && response.isMatchOk()) {
-            long jobId = Long.parseLong(response.getReponse());
-            job = new JobImpl(jobId);
-            job.setData((byte[]) response.getData());
-        }
-        return job;
+    throw new BeanstalkException(response.getStatus());
+  }
+
+  @Override
+  public Map<String, String> statsTube(final String tubeName) throws IOException {
+    if (tubeName == null) {
+      throw new BeanstalkException("NOT_FOUND");
     }
 
-    @Override // BeanstalkClient
-    public Job peekReady() throws IOException {
-        Job job = null;
-        Request request = new Request(
-                "peek-ready",
-                "FOUND",
-                "NOT_FOUND",
-                null,
-                ExpectedResponse.ByteArray,
-                2);
-        Response response = protocolHandler.processRequest(request);
-        if (response != null && response.isMatchOk()) {
-            long jobId = Long.parseLong(response.getReponse());
-            job = new JobImpl(jobId);
-            job.setData((byte[]) response.getData());
-        }
-        return job;
+    final Request request = new Request(
+        "stats-tube " + tubeName,
+        new String[]{"OK"},
+        new String[]{"NOT_FOUND"},
+        null,
+        ExpectedResponse.MAP
+    );
+
+    final Response response = connection.processRequest(request);
+    if (response.isMatchOk()) {
+      @SuppressWarnings("unchecked")
+      final Map<String, String> map = (Map<String, String>) response.getData();
+      return map;
     }
 
-    @Override // BeanstalkClient
-    public int kick(int count) throws IOException {
-        Request request = new Request(
-                "kick " + count,
-                "KICKED",
-                null,
-                null,
-                ExpectedResponse.None);
-        Response response = protocolHandler.processRequest(request);
-        if (response != null && response.isMatchOk()) {
-            count = Integer.parseInt(response.getReponse());
-        }
-        return count;
+    throw new BeanstalkException(response.getStatus());
+  }
+
+  @Override
+  public Map<String, String> stats() throws IOException {
+    final Request request = new Request(
+        "stats",
+        new String[]{"OK"},
+        null,
+        null,
+        ExpectedResponse.MAP
+    );
+
+    final Response response = connection.processRequest(request);
+    if (response.isMatchOk()) {
+      @SuppressWarnings("unchecked")
+      final Map<String, String> map = (Map<String, String>) response.getData();
+      return map;
     }
 
-    // ****************************************************************
-    // Consumer methods
-    //	stats-related
-    // ****************************************************************
-    @SuppressWarnings("unchecked")
-    @Override // BeanstalkClient
-    public Map<String, String> statsJob(long jobId) throws IOException {
-        Request request = new Request(
-                "stats-job " + jobId,
-                "OK",
-                "NOT_FOUND",
-                null,
-                ExpectedResponse.Map);
-        Response response = protocolHandler.processRequest(request);
-        Map<String, String> map = null;
-        if (response != null && response.isMatchOk()) {
-            map = (Map<String, String>) response.getData();
-        }
-        return map;
+    throw new BeanstalkException(response.getStatus());
+  }
+
+  @Override
+  public List<String> listTubes() throws IOException {
+    final Request request = new Request(
+        "list-tubes",
+        new String[]{"OK"},
+        null,
+        null,
+        ExpectedResponse.LIST
+    );
+
+    final Response response = connection.processRequest(request);
+    if (response.isMatchOk()) {
+      @SuppressWarnings("unchecked")
+      final List<String> list = (List<String>) response.getData();
+      return list;
     }
 
-    @SuppressWarnings("unchecked")
-    @Override // BeanstalkClient
-    public Map<String, String> statsTube(String tubeName) throws IOException {
-        if (tubeName == null) {
-            return null;
-        }
+    throw new BeanstalkException(response.getStatus());
+  }
 
-        Request request = new Request(
-                "stats-tube " + tubeName,
-                "OK",
-                "NOT_FOUND",
-                null,
-                ExpectedResponse.Map);
-        Response response = protocolHandler.processRequest(request);
-        Map<String, String> map = null;
-        if (response != null && response.isMatchOk()) {
-            map = (Map<String, String>) response.getData();
-        }
-        return map;
+  @Override
+  public String listTubeUsed() throws IOException {
+    final Request request = new Request(
+        "list-tube-used",
+        new String[]{"USING"},
+        null,
+        null,
+        ExpectedResponse.NONE
+    );
+
+    final Response response = connection.processRequest(request);
+    if (response.isMatchOk()) {
+      return response.getResponse();
     }
 
-    @SuppressWarnings("unchecked")
-    @Override // BeanstalkClient
-    public Map<String, String> stats() throws IOException {
-        Request request = new Request(
-                "stats",
-                "OK",
-                null,
-                null,
-                ExpectedResponse.Map);
-        Response response = protocolHandler.processRequest(request);
-        Map<String, String> map = null;
-        if (response != null && response.isMatchOk()) {
-            map = (Map<String, String>) response.getData();
-        }
-        return map;
+    throw new BeanstalkException(response.getStatus());
+  }
+
+  @Override
+  public List<String> listTubesWatched() throws IOException {
+    final Request request = new Request(
+        "list-tubes-watched",
+        new String[]{"OK"},
+        null,
+        null,
+        ExpectedResponse.LIST
+    );
+
+    final Response response = connection.processRequest(request);
+    if (response.isMatchOk()) {
+      @SuppressWarnings("unchecked")
+      final List<String> list = (List<String>) response.getData();
+      return list;
     }
 
-    @SuppressWarnings("unchecked")
-    @Override // BeanstalkClient
-    public List<String> listTubes() throws IOException {
-        Request request = new Request(
-                "list-tubes",
-                "OK",
-                null,
-                null,
-                ExpectedResponse.List);
-        Response response = protocolHandler.processRequest(request);
-        List<String> list = null;
-        if (response != null && response.isMatchOk()) {
-            list = (List<String>) response.getData();
-        }
-        return list;
+    throw new BeanstalkException(response.getStatus());
+  }
+
+  @Override
+  public String getClientVersion() {
+    return CLIENT_VERSION;
+  }
+
+  @Override
+  public void close() {
+    connection.close();
+  }
+
+  @Override
+  public boolean pauseTube(final String tubeName, final int pauseDelay) throws IOException {
+    final Request request = new Request(
+        "pause-tube " + tubeName + " " + pauseDelay,
+        new String[]{"PAUSED"},
+        null,
+        null,
+        ExpectedResponse.NONE
+    );
+
+    return connection.processRequest(request).isMatchOk();
+  }
+
+  @Override
+  public String getServerVersion() throws IOException {
+    final Map<String, String> stats = stats();
+    if (stats == null) {
+      throw new BeanstalkException("could not get stats");
     }
 
-    @Override // BeanstalkClient
-    public String listTubeUsed() throws IOException {
-        String tubeName = null;
-        Request request = new Request(
-                "list-tube-used",
-                "USING",
-                null,
-                null,
-                ExpectedResponse.None);
-        Response response = protocolHandler.processRequest(request);
-        if (response != null && response.isMatchOk()) {
-            tubeName = response.getReponse();
-        }
-        return tubeName;
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override // BeanstalkClient
-    public List<String> listTubesWatched() throws IOException {
-        Request request = new Request(
-                "list-tubes-watched",
-                "OK",
-                null,
-                null,
-                ExpectedResponse.List);
-        Response response = protocolHandler.processRequest(request);
-        List<String> list = null;
-        if (response != null && response.isMatchOk()) {
-            list = (List<String>) response.getData();
-        }
-        return list;
-    }
-
-    @Override // BeanstalkClient
-    public String getClientVersion() {
-        return CLIENT_VERSION;
-    }
-
-    @Override // BeanstalkClient
-    public void close() {
-        protocolHandler.close();
-    }
-
-    @Override // BeanstalkClient
-    public boolean pauseTube(String tubeName, int pauseDelay) throws IOException {
-        Request request = new Request(
-                "pause-tube " + tubeName + " " + pauseDelay,
-                "PAUSED",
-                null,
-                null,
-                ExpectedResponse.None);
-        Response response = protocolHandler.processRequest(request);
-        if (response != null && response.isMatchOk()) {
-            return true;
-        }
-        return false;
-    }
-
-    @Override // BeanstalkClient
-    public String getServerVersion() throws IOException {
-        Map<String, String> stats = stats();
-        if (stats == null) {
-            throw new BeanstalkException("could not get stats");
-        }
-        return stats.get("version").trim();
-    }
+    return stats.get("version").trim();
+  }
 }

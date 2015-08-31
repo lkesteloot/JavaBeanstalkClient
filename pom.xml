@@ -1,17 +1,21 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>com.teamten</groupId>
+    <groupId>com.sbux.gred</groupId>
     <artifactId>BeanstalkClient</artifactId>
     <version>1.4.8-SNAPSHOT</version>
-    <packaging>jar</packaging>    
+    <packaging>jar</packaging>
     <name>BeanstalkClient</name>
     <description>BeanstalkClient is a Beanstalkd Java client</description>
     <url>https://github.com/lkesteloot/JavaBeanstalkClient</url>
+
     <parent>
         <groupId>org.sonatype.oss</groupId>
         <artifactId>oss-parent</artifactId>
         <version>7</version>
     </parent>
+
     <licenses>
         <license>
             <name>GNU Lesser General Public License</name>
@@ -22,21 +26,32 @@
             <name>3-Clause BSD License</name>
             <url>http://www.opensource.org/licenses/BSD-3-Clause</url>
             <distribution>repo</distribution>
-        </license>            
+        </license>
     </licenses>
+
     <scm>
-        <url>https://github.com/lkesteloot/JavaBeanstalkClient</url>
-        <connection>scm:git:https://github.com/lkesteloot/JavaBeanstalkClient.git</connection>
-        <developerConnection>scm:git:https://github.com/lkesteloot/JavaBeanstalkClient.git</developerConnection>
+        <url>https://github.com/sbux-gred/JavaBeanstalkClient</url>
+        <connection>scm:git:https://github.com/sbux-gred/JavaBeanstalkClient.git</connection>
+        <developerConnection>scm:git:https://github.com/sbux-gred/JavaBeanstalkClient.git
+        </developerConnection>
     </scm>
+
     <dependencies>
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>4.10</version>
+            <version>4.12</version>
             <scope>test</scope>
         </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.16.6</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
+
     <build>
         <plugins>
             <plugin>
@@ -44,8 +59,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>2.5.1</version>
                 <configuration>
-                    <source>1.6</source>
-                    <target>1.6</target>
+                    <source>1.8</source>
+                    <target>1.8</target>
                 </configuration>
             </plugin>
             <plugin>
@@ -85,7 +100,7 @@
                     <execution>
                         <id>update-project-license</id>
                         <goals>
-                            <goal>update-project-license</goal>                    
+                            <goal>update-project-license</goal>
                         </goals>
                         <configuration>
                             <licenseFile>LICENSE</licenseFile>
@@ -93,7 +108,7 @@
                         </configuration>
                     </execution>
                 </executions>
-            </plugin>        
+            </plugin>
         </plugins>
-    </build>    
+    </build>
 </project>

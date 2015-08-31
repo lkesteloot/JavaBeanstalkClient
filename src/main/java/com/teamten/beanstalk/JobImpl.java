@@ -21,32 +21,24 @@ package com.teamten.beanstalk;
  * along with JavaBeanstalkCLient. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-import com.teamten.beanstalk.Job;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * A concrete implementation of a job.
  */
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 class JobImpl implements Job {
-    private byte[] data;
-    private long jobId;
 
-    public JobImpl(long jobId) {
-        this.jobId = jobId;
-        this.data = null;
-    }
+  private byte[] data;
+  private long jobId;
 
-    @Override // Job
-    public byte[] getData() {
-        return data;
-    }
-
-    @Override // Job
-    public long getJobId() {
-        return jobId;
-    }
-
-    @Override // Job
-    public void setData(byte[] data) {
-        this.data = data;
-    }
+  public JobImpl(final long jobId) {
+    this.jobId = jobId;
+    this.data = null;
+  }
 }
