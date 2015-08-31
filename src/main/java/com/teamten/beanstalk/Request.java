@@ -22,105 +22,69 @@ package com.teamten.beanstalk;
  *
  */
 
+import lombok.Getter;
+
 /**
  * Encapsulates a request to the server.
  */
 class Request {
 
-    private String command;
-    private String[] validStates;
-    private String[] errorStates;
-    private byte[] data;
-    private ExpectedResponse expectedResponse;
-    private int expectedDataLengthIndex;
+  @Getter
+  private final String command;
 
-    public Request() {
-    }
+  @Getter
+  private final String[] validStates;
 
-    public Request(String command, String[] validStates, String[] errorStates, byte[] data, ExpectedResponse expectedResponse) {
-        this.command = command;
-        this.validStates = validStates;
-        this.errorStates = errorStates;
-        this.data = data;
-        this.expectedResponse = expectedResponse;
-        this.expectedDataLengthIndex = -1;
-    }
+  @Getter
+  private final String[] errorStates;
 
-    public Request(String command, String[] validStates, String[] errorStates, byte[] data, ExpectedResponse expectedResponse, int expectedDataLengthIndex) {
-        this(command, validStates, errorStates, data, expectedResponse);
-        this.expectedDataLengthIndex = expectedDataLengthIndex;
-    }
+  @Getter
+  private final byte[] data;
 
-    public Request(String command, String validState, String errorState, byte[] data, ExpectedResponse expectedResponse) {
-        this.command = command;
+  @Getter
+  private final ExpectedResponse expectedResponse;
 
-        if(validState != null) {
-            validStates = new String[] {
-                validState
-            };
-        }
+  @Getter
+  private final int expectedDataLengthIndex;
 
-        if(errorState != null) {
-            errorStates = new String[] {
-                errorState
-            };
-        }
+  /**
+   * @param command                 beanstalkd command
+   * @param validStates             Array of valid states
+   * @param errorStates             Array of error states
+   * @param data                    Byte array of data
+   * @param expectedResponse        Expected response type
+   * @param expectedDataLengthIndex Expected length of data
+   */
+  public Request(
+      final String command,
+      final String[] validStates,
+      final String[] errorStates,
+      final byte[] data,
+      final ExpectedResponse expectedResponse,
+      final int expectedDataLengthIndex
+  ) {
+    this.command = command;
+    this.validStates = validStates;
+    this.errorStates = errorStates;
+    this.data = data;
+    this.expectedResponse = expectedResponse;
+    this.expectedDataLengthIndex = expectedDataLengthIndex;
+  }
 
-        this.data = data;
-        this.expectedResponse = expectedResponse;
-        this.expectedDataLengthIndex = -1;
-    }
-
-    public Request(String command, String validState, String errorState, byte[] data, ExpectedResponse expectedResponse, int expectedDataLengthIndex) {
-        this(command, validState, errorState, data, expectedResponse);
-        this.expectedDataLengthIndex = expectedDataLengthIndex;
-    }
-
-    public String getCommand() {
-        return command;
-    }
-
-    public void setCommand(String command) {
-        this.command = command;
-    }
-
-    public String[] getValidStates() {
-        return validStates;
-    }
-
-    public void setValidStates(String[] validStates) {
-        this.validStates = validStates;
-    }
-
-    public String[] getErrorStates() {
-        return errorStates;
-    }
-
-    public void setErrorStates(String[] errorStates) {
-        this.errorStates = errorStates;
-    }
-
-    public byte[] getData() {
-        return data;
-    }
-
-    public void setData(byte[] data) {
-        this.data = data;
-    }
-
-    public ExpectedResponse getExpectedResponse() {
-        return expectedResponse;
-    }
-
-    public void setExpectedResponse(ExpectedResponse expectedResponse) {
-        this.expectedResponse = expectedResponse;
-    }
-
-    public void setExpectedDataLengthIndex(int index) {
-        this.expectedDataLengthIndex = index;
-    }
-
-    public int getExpectedDataLengthIndex() {
-        return this.expectedDataLengthIndex;
-    }
+  /**
+   * @param command          beanstalkd command
+   * @param validStates      Array of valid states
+   * @param errorStates      Array of error states
+   * @param data             Byte array of data
+   * @param expectedResponse Expected response type
+   */
+  public Request(
+      final String command,
+      final String[] validStates,
+      final String[] errorStates,
+      final byte[] data,
+      final ExpectedResponse expectedResponse
+  ) {
+    this(command, validStates, errorStates, data, expectedResponse, -1);
+  }
 }
